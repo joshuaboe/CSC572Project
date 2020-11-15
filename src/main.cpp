@@ -18,11 +18,19 @@ CPE/CSC 471 Lab base code Wood/Dunn/Eckhardt
 #include <glm/gtc/matrix_transform.hpp>
 using namespace std;
 using namespace glm;
-shared_ptr<Shape> shape;
+shared_ptr<Shape> sphere;
+shared_ptr<Shape> peg;
 
-#define NUMBALLS 100
-#define BALLRADIUS .20
-#define BALLBUFFER .4
+#define NUMBALLS 1
+#define NUMPEGS 25
+
+#define BALLRADIUS 0.20
+#define PEGSEPARATION (BALLRADIUS * 3)
+
+#define PEGSCALE 0.1
+
+#define BOARDWIDTH 10.0
+#define BOARDLENGTH 10.0
 
 
 double get_last_elapsed_time()
@@ -41,7 +49,7 @@ public:
 	camera()
 	{
 		w = a = s = d = 0;
-		pos = rot = glm::vec3(0, 0, 0);
+		pos = rot = glm::vec3(0, 0, 7);
 	}
 	glm::mat4 process(double ftime)
 	{
@@ -75,27 +83,22 @@ camera mycam;
 class ssbo_data
 {
 public:  
-	vec4 pos[NUMBALLS]; // x, y, z, w = radius
-	vec4 v[NUMBALLS];	// x, y, z, w = collision
-	uint collisions[NUMBALLS];
+	vec4 ballpos[NUMBALLS]; // x, y, z, w = radius
+	vec4 ballv[NUMBALLS];	// x, y, z, w = collision
+	vec4 pegpos[NUMPEGS];
 
 	void update(float delta_t)
 	{
 		for (int i = 0; i < NUMBALLS; i++) {
-			v[i].y = v[i].y + ACC * 0.001f;
+			ballv[i].y = ballv[i].y + ACC * 0.001f;
 
-			pos[i].x = pos[i].x + v[i].x * delta_t;
-			pos[i].y = pos[i].y + v[i].y * delta_t;
-			pos[i].z = pos[i].z + v[i].z * delta_t;
+			ballpos[i].x = ballpos[i].x + ballv[i].x * delta_t;
+			ballpos[i].y = ballpos[i].y + ballv[i].y * delta_t;
+			ballpos[i].z = ballpos[i].z + ballv[i].z * delta_t;
 		}
 	}
 
-	void reset()
-	{
-		for (int i = 0; i < NUMBALLS; i++) {
-			collisions[i] = 0;
-		}
-	}
+
 };
 
 
@@ -131,8 +134,8 @@ public:
 	GLuint MeshPosID, MeshTexID, IndexBufferIDBox;
 
 	//texture data
-	GLuint Texture;
-	GLuint Texture2, HeightTex;
+	GLuint WallTexture;
+	GLuint BallTex, PegTex;
 
 	void keyCallback(GLFWwindow* window, int key, int scancode, int action, int mods)
 	{
@@ -255,22 +258,27 @@ public:
 
 		string resourceDirectory = "../resources";
 		// Initialize mesh.
-		shape = make_shared<Shape>();
-		//shape->loadMesh(resourceDirectory + "/t800.obj");
-		shape->loadMesh(resourceDirectory + "/sphere.obj");
-		shape->resize();
-		shape->init();
+		sphere = make_shared<Shape>();
+		//sphere->loadMesh(resourceDirectory + "/t800.obj");
+		sphere->loadMesh(resourceDirectory + "/sphere.obj");
+		sphere->resize();
+		sphere->init();
+
+		peg = make_shared<Shape>();
+		peg->loadMesh(resourceDirectory + "/peg.obj");
+		peg->resize();
+		peg->init();
 
 		int width, height, channels;
 		char filepath[1000];
 
 		//texture 1
-		string str = resourceDirectory + "/grid.jpg";
+		string str = resourceDirectory + "/wood1.jpg";
 		strcpy(filepath, str.c_str());
 		unsigned char* data = stbi_load(filepath, &width, &height, &channels, 4);
-		glGenTextures(1, &Texture);
+		glGenTextures(1, &WallTexture);
 		glActiveTexture(GL_TEXTURE0);
-		glBindTexture(GL_TEXTURE_2D, Texture);
+		glBindTexture(GL_TEXTURE_2D, WallTexture);
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
@@ -278,12 +286,12 @@ public:
 		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, data);
 		glGenerateMipmap(GL_TEXTURE_2D);
 		//texture 2
-		str = resourceDirectory + "/sky.jpg";
+		str = resourceDirectory + "/metal.jpg";
 		strcpy(filepath, str.c_str());
 		data = stbi_load(filepath, &width, &height, &channels, 4);
-		glGenTextures(1, &Texture2);
+		glGenTextures(1, &PegTex);
 		glActiveTexture(GL_TEXTURE1);
-		glBindTexture(GL_TEXTURE_2D, Texture2);
+		glBindTexture(GL_TEXTURE_2D, PegTex);
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
@@ -292,12 +300,12 @@ public:
 		glGenerateMipmap(GL_TEXTURE_2D);
 
 		//texture 3
-		str = resourceDirectory + "/pluto.jpg";
+		str = resourceDirectory + "/magenta.png";
 		strcpy(filepath, str.c_str());
 		data = stbi_load(filepath, &width, &height, &channels, 4);
-		glGenTextures(1, &HeightTex);
+		glGenTextures(1, &BallTex);
 		glActiveTexture(GL_TEXTURE1);
-		glBindTexture(GL_TEXTURE_2D, HeightTex);
+		glBindTexture(GL_TEXTURE_2D, BallTex);
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
@@ -326,11 +334,17 @@ public:
 		glEnable(GL_BLEND);
 		glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
-		for (int i = 0; i < 10; i++) {
-			for (int j = 0; j < 10; j++) {
-				ssbo_CPUMEM.pos[i * 10 + j] = vec4(-4.5 + (i * (2 * BALLRADIUS + BALLBUFFER)), -4.5 + (i * (2 * BALLRADIUS + BALLBUFFER)), -24.5 + (j * (2 * BALLRADIUS + BALLBUFFER)), BALLRADIUS);
-				ssbo_CPUMEM.v[i * 10 + j] = vec4((-1 * (rand() % 2)) * (randf() + 1.0) * 3.0, (-1 * (rand() % 2)) * (randf() - 0.5), (-1 * (rand() % 2)) * (randf() + 1.0) * 3.0, 0);
-			}
+		// INIT PEGS
+		for (int i = 0; i < NUMPEGS; i++) {
+			ssbo_CPUMEM.pegpos[i] = vec4(-1.0, -1.0, -20.0, PEGSCALE);
+
+		}
+
+		// INIT BALLS
+		for (int i = 0; i < NUMBALLS; i++) {
+			ssbo_CPUMEM.ballpos[i] = vec4(0.0, 5.0, -20.0, BALLRADIUS);
+			ssbo_CPUMEM.ballv[i] = vec4(0.0);
+
 		}
 	}
 
@@ -424,20 +438,20 @@ public:
 
 		for (int i = 0; i < NUMBALLS; i++) {
 
-			if ((ssbo_CPUMEM.pos[i].y - ssbo_CPUMEM.pos[i].w) < -5.0)
-				ssbo_CPUMEM.v[i].y = abs(ssbo_CPUMEM.v[i].y);
-			if ((ssbo_CPUMEM.pos[i].y + ssbo_CPUMEM.pos[i].w) > 5.0)
-				ssbo_CPUMEM.v[i].y = -abs(ssbo_CPUMEM.v[i].y);
+			if ((ssbo_CPUMEM.ballpos[i].y - ssbo_CPUMEM.ballpos[i].w) < -5.0)
+				ssbo_CPUMEM.ballv[i].y = abs(ssbo_CPUMEM.ballv[i].y);
+			if ((ssbo_CPUMEM.ballpos[i].y + ssbo_CPUMEM.ballpos[i].w) > 5.0)
+				ssbo_CPUMEM.ballv[i].y = -abs(ssbo_CPUMEM.ballv[i].y);
 
-			if ((ssbo_CPUMEM.pos[i].x - ssbo_CPUMEM.pos[i].w) < -5.0)
-				ssbo_CPUMEM.v[i].x = abs(ssbo_CPUMEM.v[i].x);
-			if ((ssbo_CPUMEM.pos[i].x + ssbo_CPUMEM.pos[i].w) > 5.0)
-				ssbo_CPUMEM.v[i].x = -abs(ssbo_CPUMEM.v[i].x);
+			if ((ssbo_CPUMEM.ballpos[i].x - ssbo_CPUMEM.ballpos[i].w) < -5.0)
+				ssbo_CPUMEM.ballv[i].x = abs(ssbo_CPUMEM.ballv[i].x);
+			if ((ssbo_CPUMEM.ballpos[i].x + ssbo_CPUMEM.ballpos[i].w) > 5.0)
+				ssbo_CPUMEM.ballv[i].x = -abs(ssbo_CPUMEM.ballv[i].x);
 
-			if ((ssbo_CPUMEM.pos[i].z - ssbo_CPUMEM.pos[i].w) < -25.0)
-				ssbo_CPUMEM.v[i].z = abs(ssbo_CPUMEM.v[i].z);
-			if ((ssbo_CPUMEM.pos[i].z + ssbo_CPUMEM.pos[i].w) > -15.0)
-				ssbo_CPUMEM.v[i].z = -abs(ssbo_CPUMEM.v[i].z);
+			if ((ssbo_CPUMEM.ballpos[i].z - ssbo_CPUMEM.ballpos[i].w) < -25.0)
+				ssbo_CPUMEM.ballv[i].z = abs(ssbo_CPUMEM.ballv[i].z);
+			if ((ssbo_CPUMEM.ballpos[i].z + ssbo_CPUMEM.ballpos[i].w) > -15.0)
+				ssbo_CPUMEM.ballv[i].z = -abs(ssbo_CPUMEM.ballv[i].z);
 		}
 
 		compute();
@@ -447,8 +461,6 @@ public:
 	void compute()
 	{
 		// Handle collisions
-		// reset collision back to false
-		ssbo_CPUMEM.reset();
 		// copy CPU data to GPU
 		glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssbo_GPU_id);
 		glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(ssbo_data), &ssbo_CPUMEM, GL_DYNAMIC_COPY);
@@ -521,9 +533,11 @@ public:
 		glm::mat4 TransZ;
 		glm::mat4 S;
 		V = mycam.process(frametime);
+
+		// DRAW BALLS
 		for (int i = 0; i < NUMBALLS; i++) {
-			TransZ = glm::translate(glm::mat4(1.0f), vec3(ssbo_CPUMEM.pos[i]));
-			S = glm::scale(glm::mat4(1.0f), glm::vec3(ssbo_CPUMEM.pos[i].w));
+			TransZ = glm::translate(glm::mat4(1.0f), vec3(ssbo_CPUMEM.ballpos[i]));
+			S = glm::scale(glm::mat4(1.0f), glm::vec3(ssbo_CPUMEM.ballpos[i].w));
 
 			M = TransZ * RotateY * RotateX * S;
 
@@ -536,16 +550,37 @@ public:
 			glUniformMatrix4fv(prog->getUniform("M"), 1, GL_FALSE, &M[0][0]);
 			glUniform3fv(prog->getUniform("campos"), 1, &mycam.pos[0]);
 			glActiveTexture(GL_TEXTURE0);
-			glBindTexture(GL_TEXTURE_2D, HeightTex);
-			shape->draw(prog, false);
+			glBindTexture(GL_TEXTURE_2D, BallTex);
+			sphere->draw(prog, false);
+		}
+
+		// DRAW PEGS
+		for (int i = 0; i < NUMPEGS; i++) {
+			TransZ = glm::translate(glm::mat4(1.0f), vec3(ssbo_CPUMEM.pegpos[i]));
+			S = glm::scale(glm::mat4(1.0f), glm::vec3(ssbo_CPUMEM.pegpos[i].w));
+
+			M = TransZ * RotateX * S;
+
+			// Draw the box using GLSL.
+			prog->bind();
+
+			//send the matrices to the shaders
+			glUniformMatrix4fv(prog->getUniform("P"), 1, GL_FALSE, &P[0][0]);
+			glUniformMatrix4fv(prog->getUniform("V"), 1, GL_FALSE, &V[0][0]);
+			glUniformMatrix4fv(prog->getUniform("M"), 1, GL_FALSE, &M[0][0]);
+			glUniform3fv(prog->getUniform("campos"), 1, &mycam.pos[0]);
+			glActiveTexture(GL_TEXTURE0);
+			glBindTexture(GL_TEXTURE_2D, PegTex);
+			peg->draw(prog, false);
 		}
 
 
 
+		// DRAW WALL
 		heightshader->bind();
 		//glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
-		S = glm::scale(glm::mat4(1.0f), glm::vec3(10.0f, 10.0f, 10.0f));
-		glm::mat4 TransY = glm::translate(glm::mat4(1.0f), glm::vec3(-5.0f, -5.0f, -25));
+		S = glm::scale(glm::mat4(1.0f), glm::vec3(BOARDWIDTH, BOARDLENGTH, 1.0));
+		glm::mat4 TransY = glm::translate(glm::mat4(1.0f), glm::vec3(-1 * BOARDWIDTH/2, -1 * BOARDWIDTH / 2, -25));
 		M = TransY * S;
 		glUniformMatrix4fv(heightshader->getUniform("M"), 1, GL_FALSE, &M[0][0]);
 		glUniformMatrix4fv(heightshader->getUniform("P"), 1, GL_FALSE, &P[0][0]);
@@ -554,33 +589,44 @@ public:
 		glBindVertexArray(VertexArrayID);
 		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, IndexBufferIDBox);
 		glActiveTexture(GL_TEXTURE1);
-		glBindTexture(GL_TEXTURE_2D, Texture);
-		glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_SHORT, (void*)0);
+		glBindTexture(GL_TEXTURE_2D, WallTexture);
+		//glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_SHORT, (void*)0);
 
 		M = TransY * S * RotateX;
 		glUniformMatrix4fv(heightshader->getUniform("M"), 1, GL_FALSE, &M[0][0]);
 		glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_SHORT, (void*)0);
 
-		RotateY = glm::rotate(glm::mat4(1.0f), angle, glm::vec3(0.0f, 1.0f, 0.0f));
-		M = TransY * S * RotateY * RotateX;
-		glUniformMatrix4fv(heightshader->getUniform("M"), 1, GL_FALSE, &M[0][0]);
-		glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_SHORT, (void*)0);
+		//RotateY = glm::rotate(glm::mat4(1.0f), angle, glm::vec3(0.0f, 1.0f, 0.0f));
+		//M = TransY * S * RotateY * RotateX;
+		//glUniformMatrix4fv(heightshader->getUniform("M"), 1, GL_FALSE, &M[0][0]);
+		//glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_SHORT, (void*)0);
 
-		RotateY = glm::rotate(glm::mat4(1.0f), -angle, glm::vec3(0.0f, 1.0f, 0.0f));
-		TransY = glm::translate(glm::mat4(1.0f), glm::vec3(5.0f, -5.0f, -15));
-		M = TransY * S * RotateY * RotateX;
-		glUniformMatrix4fv(heightshader->getUniform("M"), 1, GL_FALSE, &M[0][0]);
-		glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_SHORT, (void*)0);
+		//RotateY = glm::rotate(glm::mat4(1.0f), -angle, glm::vec3(0.0f, 1.0f, 0.0f));
+		//TransY = glm::translate(glm::mat4(1.0f), glm::vec3(5.0f, -5.0f, -15));
+		//M = TransY * S * RotateY * RotateX;
+		//glUniformMatrix4fv(heightshader->getUniform("M"), 1, GL_FALSE, &M[0][0]);
+		//glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_SHORT, (void*)0);
 		heightshader->unbind();
 
 	}
 
 };
 //******************************************************************************************
+bool isPerfectSquare(double x)
+{
+	long double sr = sqrt(x);
+	return ((sr - floor(sr)) == 0);
+}
+
 int main(int argc, char** argv)
 {
 
 	srand(time(0));
+
+	if (!isPerfectSquare(NUMPEGS)) {
+		std::cout << "NUMPEGS must be a perfect square (1, 4, 9, 16, ..., 1024, etc.)" << std::endl;
+		exit(111);
+	}
 
 	std::string resourceDir = "../resources"; // Where the resources are loaded from
 	if (argc >= 2)
