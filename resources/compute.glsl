@@ -1,8 +1,25 @@
 #version 450 
 #extension GL_ARB_shader_storage_buffer_object : require
 
-#define NUMBALLS 1
-#define NUMPEGS 25
+#define NUMBALLS 20 // number of balls
+#define NUMPEGS 100 // number of pegs
+
+#define BALLRADIUS 0.20 // radius of the balls
+#define PEGSEPARATION (BALLRADIUS * 3.0) // how far to distance pegs between one another
+
+#define PEGSCALE 0.1 // how large the pegs are
+
+#define BOARDBUFFER 2.0 // extra space at top and bottom of board
+
+#define BOARDWIDTH ((2.0 * sqrt(NUMPEGS) + 1.0) * PEGSEPARATION)
+#define BOARDLENGTH (((2.0 * sqrt(NUMPEGS) + 1.0) * PEGSEPARATION) + (2.0 * BOARDBUFFER))
+
+#define CAMERAPOSITION (-1.0 * BOARDLENGTH * 1.7) // distance of camera from board
+#define BOARDPOSITION 0.0 // z-ccordinate of the wall
+
+#define LEFTSIDE (-1.0 * BOARDWIDTH / 2.0)
+#define BOTTOMSIDE (-1.0 * BOARDLENGTH / 2.0)
+#define BOTTOMPEG ((-1.0 * BOARDLENGTH / 2.0) + BOARDBUFFER)
 
 layout(local_size_x = NUMBALLS, local_size_y = 1) in;	
 
@@ -78,6 +95,25 @@ void performCollision(uint s1, uint s2) {
 void main() 
 {
 	uint index = gl_LocalInvocationID.x;
-    uint a = 0;
+    vec4 curr_pos = ballpos[index];
 
+    int max_index = int(sqrt(NUMPEGS)) - 1;
+    float min_board_height = pegpos[0][0].y - PEGSEPARATION;
+    float max_board_height = pegpos[max_index][max_index].y + PEGSEPARATION;
+    float max_board_width = pegpos[max_index][max_index].x + PEGSEPARATION;
+
+    int row = int((curr_pos.y - (pegpos[0][0].y - PEGSEPARATION)) / (PEGSEPARATION * 2));
+    int col = int((curr_pos.x - (pegpos[0][0].x - PEGSEPARATION) - ((row % 2) * PEGSEPARATION)) / (PEGSEPARATION * 2));
+    //ballv[index].w = row*10 + col;
+
+    if (row <= max_index && row >= 0 && col <= max_index && col >= 0) {
+        float distance_to_collide = BALLRADIUS + PEGSCALE; //0.35; //(BALLRADIUS + PEGSCALE) / PEGSEPARATION * 2;
+        vec2 diff = curr_pos.xy - pegpos[row][col].xy;
+        //ballv[index].w = length(diff);
+        if (length(diff) < distance_to_collide) {
+            float dampening = 0.7;
+            ballv[index].xy = normalize(diff) * length(ballv[index].xy) * dampening;
+            ballpos[index].xy = pegpos[row][col].xy + normalize(diff) * distance_to_collide;
+        }
+    }
 }

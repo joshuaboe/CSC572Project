@@ -21,8 +21,8 @@ using namespace glm;
 shared_ptr<Shape> sphere;
 shared_ptr<Shape> peg;
 
-#define NUMBALLS 1 // number of balls
-#define NUMPEGS 64 // number of pegs
+#define NUMBALLS 20 // number of balls
+#define NUMPEGS 100 // number of pegs
 
 #define BALLRADIUS 0.20 // radius of the balls
 #define PEGSEPARATION (BALLRADIUS * 3.0) // how far to distance pegs between one another
@@ -102,6 +102,7 @@ public:
 
 		for (int i = 0; i < NUMBALLS; i++) {
 			// if ball has reached ground, don't affect with gravity
+
 			if (ballv[i].w == 1.0) {
 				continue;
 			}
@@ -368,7 +369,7 @@ public:
 		// INIT PEGS
 		for (int i = 0; i < sqrt(NUMPEGS); i++) {
 			for (int j = 0; j < sqrt(NUMPEGS); j++) {
-				ssbo_CPUMEM.pegpos[i][j] = vec4(LEFTSIDE + (((i*2.0) + (j % 2) + 1.0) * PEGSEPARATION), BOTTOMPEG + ((j*2.0) * PEGSEPARATION), BOARDPOSITION + BALLRADIUS, PEGSCALE);
+				ssbo_CPUMEM.pegpos[j][i] = vec4(LEFTSIDE + (((i*2.0) + (j % 2) + 1.0) * PEGSEPARATION), BOTTOMPEG + ((j*2.0) * PEGSEPARATION), BOARDPOSITION + BALLRADIUS, PEGSCALE);
 			}
 		}
 
@@ -376,7 +377,7 @@ public:
 		float ballseparation = ((BOARDWIDTH - 4.0*BALLRADIUS) / (NUMBALLS + 1.0));
 		for (int i = 0; i < NUMBALLS; i++) {
 			ssbo_CPUMEM.ballpos[i] = vec4(LEFTSIDE + 2.0*BALLRADIUS + ((i+1) * ballseparation), BOARDLENGTH/2.0 - (2.0*BALLRADIUS), BOARDPOSITION + BALLRADIUS, BALLRADIUS);
-			ssbo_CPUMEM.ballv[i] = vec4(3.0, -2.0, 0.0, 0.0);
+			ssbo_CPUMEM.ballv[i] = vec4(-0.1, -1.0, 0.0, 0.0);
 			//ssbo_CPUMEM.ballpos[i] = vec4(LEFTSIDE + PEGSEPARATION, BOTTOMPEG + ((sqrt(NUMPEGS) * 2.0) * PEGSEPARATION), BOARDPOSITION + 1.0, BALLRADIUS);
 			//ssbo_CPUMEM.ballv[i] = vec4(0.0);
 
@@ -517,6 +518,8 @@ public:
 		memcpy(&ssbo_CPUMEM, p, siz);
 		glUnmapBuffer(GL_SHADER_STORAGE_BUFFER);
 		glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0); // unbind
+
+		//std::cout << ssbo_CPUMEM.ballv[0].w << std::endl;
 
 	}
 
