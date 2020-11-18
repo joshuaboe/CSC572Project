@@ -22,7 +22,7 @@ shared_ptr<Shape> sphere;
 shared_ptr<Shape> peg;
 
 #define NUMBALLS 1 // number of balls
-#define NUMPEGS 25 // number of pegs
+#define NUMPEGS 64 // number of pegs
 
 #define BALLRADIUS 0.20 // radius of the balls
 #define PEGSEPARATION (BALLRADIUS * 3.0) // how far to distance pegs between one another
@@ -38,7 +38,9 @@ shared_ptr<Shape> peg;
 #define BOARDPOSITION 0.0 // z-ccordinate of the wall
 
 #define LEFTSIDE (-1.0 * BOARDWIDTH / 2.0)
-#define BOTTOMSIDE ((-1.0 * BOARDWIDTH / 2.0) + 2.0*BOARDBUFFER)
+#define BOTTOMSIDE (-1.0 * BOARDLENGTH / 2.0)
+#define BOTTOMPEG ((-1.0 * BOARDLENGTH / 2.0) + BOARDBUFFER)
+
 
 
 double get_last_elapsed_time()
@@ -92,12 +94,18 @@ class ssbo_data
 {
 public:  
 	vec4 ballpos[NUMBALLS]; // x, y, z, w = radius
-	vec4 ballv[NUMBALLS];	// x, y, z, w = collision
+	vec4 ballv[NUMBALLS];	// x, y, z, w = 1.0 after ball has hit ground
 	vec4 pegpos[NUMPEGS][NUMPEGS];
 
 	void update(float delta_t)
 	{
+
 		for (int i = 0; i < NUMBALLS; i++) {
+			// if ball has reached ground, don't affect with gravity
+			if (ballv[i].w == 1.0) {
+				continue;
+			}
+
 			ballv[i].y = ballv[i].y + ACC * 0.001f;
 
 			ballpos[i].x = ballpos[i].x + ballv[i].x * delta_t;
@@ -143,7 +151,7 @@ public:
 
 	//texture data
 	GLuint WallTexture;
-	GLuint BallTex, PegTex;
+	GLuint BallTex, PegTex, BottomTex;
 
 	void keyCallback(GLFWwindow* window, int key, int scancode, int action, int mods)
 	{
@@ -280,7 +288,7 @@ public:
 		int width, height, channels;
 		char filepath[1000];
 
-		//texture 1
+		// Board Texture
 		string str = resourceDirectory + "/wood1.jpg";
 		strcpy(filepath, str.c_str());
 		unsigned char* data = stbi_load(filepath, &width, &height, &channels, 4);
@@ -293,7 +301,8 @@ public:
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, data);
 		glGenerateMipmap(GL_TEXTURE_2D);
-		//texture 2
+
+		// Peg Texture
 		str = resourceDirectory + "/metal.jpg";
 		strcpy(filepath, str.c_str());
 		data = stbi_load(filepath, &width, &height, &channels, 4);
@@ -307,13 +316,27 @@ public:
 		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, data);
 		glGenerateMipmap(GL_TEXTURE_2D);
 
-		//texture 3
+		// Ball Texture
 		str = resourceDirectory + "/magenta.png";
 		strcpy(filepath, str.c_str());
 		data = stbi_load(filepath, &width, &height, &channels, 4);
 		glGenTextures(1, &BallTex);
 		glActiveTexture(GL_TEXTURE1);
 		glBindTexture(GL_TEXTURE_2D, BallTex);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, data);
+		glGenerateMipmap(GL_TEXTURE_2D);
+
+		// Bottom Texture
+		str = resourceDirectory + "/cloth.png";
+		strcpy(filepath, str.c_str());
+		data = stbi_load(filepath, &width, &height, &channels, 4);
+		glGenTextures(1, &BottomTex);
+		glActiveTexture(GL_TEXTURE1);
+		glBindTexture(GL_TEXTURE_2D, BottomTex);
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
@@ -343,22 +366,19 @@ public:
 		glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
 		// INIT PEGS
-		//for (int i = 0; i < NUMPEGS; i++) {
-		//	ssbo_CPUMEM.pegpos[i] = vec4(-1.0, -1.0, BOARDPOSITION + 1.0, PEGSCALE);
-
-		//}
-
 		for (int i = 0; i < sqrt(NUMPEGS); i++) {
 			for (int j = 0; j < sqrt(NUMPEGS); j++) {
-				ssbo_CPUMEM.pegpos[i][j] = vec4(LEFTSIDE + (((i*2.0) + (j % 2) + 1.0) * PEGSEPARATION), BOTTOMSIDE + ((j*2.0) * PEGSEPARATION), BOARDPOSITION + 1.0, PEGSCALE);
-
+				ssbo_CPUMEM.pegpos[i][j] = vec4(LEFTSIDE + (((i*2.0) + (j % 2) + 1.0) * PEGSEPARATION), BOTTOMPEG + ((j*2.0) * PEGSEPARATION), BOARDPOSITION + BALLRADIUS, PEGSCALE);
 			}
 		}
 
 		// INIT BALLS
+		float ballseparation = ((BOARDWIDTH - 4.0*BALLRADIUS) / (NUMBALLS + 1.0));
 		for (int i = 0; i < NUMBALLS; i++) {
-			ssbo_CPUMEM.ballpos[i] = vec4(0.0, BOARDLENGTH/2, BOARDPOSITION + 1.0, BALLRADIUS);
-			ssbo_CPUMEM.ballv[i] = vec4(0.0);
+			ssbo_CPUMEM.ballpos[i] = vec4(LEFTSIDE + 2.0*BALLRADIUS + ((i+1) * ballseparation), BOARDLENGTH/2.0 - (2.0*BALLRADIUS), BOARDPOSITION + BALLRADIUS, BALLRADIUS);
+			ssbo_CPUMEM.ballv[i] = vec4(3.0, -2.0, 0.0, 0.0);
+			//ssbo_CPUMEM.ballpos[i] = vec4(LEFTSIDE + PEGSEPARATION, BOTTOMPEG + ((sqrt(NUMPEGS) * 2.0) * PEGSEPARATION), BOARDPOSITION + 1.0, BALLRADIUS);
+			//ssbo_CPUMEM.ballv[i] = vec4(0.0);
 
 		}
 	}
@@ -453,20 +473,16 @@ public:
 
 		for (int i = 0; i < NUMBALLS; i++) {
 
-			if ((ssbo_CPUMEM.ballpos[i].y - ssbo_CPUMEM.ballpos[i].w) < -5.0)
-				ssbo_CPUMEM.ballv[i].y = abs(ssbo_CPUMEM.ballv[i].y);
-			if ((ssbo_CPUMEM.ballpos[i].y + ssbo_CPUMEM.ballpos[i].w) > 5.0)
-				ssbo_CPUMEM.ballv[i].y = -abs(ssbo_CPUMEM.ballv[i].y);
+			// floor
+			if ((ssbo_CPUMEM.ballpos[i].y - ssbo_CPUMEM.ballpos[i].w) < BOTTOMSIDE)
+				ssbo_CPUMEM.ballv[i] = vec4(0.0,0.0,0.0,1.0); // set w to 1.0 so compute shader knows ball has already hit the ground
 
-			if ((ssbo_CPUMEM.ballpos[i].x - ssbo_CPUMEM.ballpos[i].w) < -5.0)
+			// left wall
+			if ((ssbo_CPUMEM.ballpos[i].x - ssbo_CPUMEM.ballpos[i].w) < LEFTSIDE)
 				ssbo_CPUMEM.ballv[i].x = abs(ssbo_CPUMEM.ballv[i].x);
-			if ((ssbo_CPUMEM.ballpos[i].x + ssbo_CPUMEM.ballpos[i].w) > 5.0)
+			// right wall
+			if ((ssbo_CPUMEM.ballpos[i].x + ssbo_CPUMEM.ballpos[i].w) > (LEFTSIDE + BOARDWIDTH))
 				ssbo_CPUMEM.ballv[i].x = -abs(ssbo_CPUMEM.ballv[i].x);
-
-			if ((ssbo_CPUMEM.ballpos[i].z - ssbo_CPUMEM.ballpos[i].w) < -25.0)
-				ssbo_CPUMEM.ballv[i].z = abs(ssbo_CPUMEM.ballv[i].z);
-			if ((ssbo_CPUMEM.ballpos[i].z + ssbo_CPUMEM.ballpos[i].w) > -15.0)
-				ssbo_CPUMEM.ballv[i].z = -abs(ssbo_CPUMEM.ballv[i].z);
 		}
 
 		compute();
@@ -597,7 +613,7 @@ public:
 		heightshader->bind();
 		//glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
 		S = glm::scale(glm::mat4(1.0f), glm::vec3(BOARDWIDTH, BOARDLENGTH, 1.0));
-		glm::mat4 TransY = glm::translate(glm::mat4(1.0f), glm::vec3(-1 * BOARDWIDTH/2, -1 * BOARDWIDTH / 2, BOARDPOSITION));
+		glm::mat4 TransY = glm::translate(glm::mat4(1.0f), glm::vec3(LEFTSIDE, BOTTOMSIDE, BOARDPOSITION));
 		M = TransY * S;
 		glUniformMatrix4fv(heightshader->getUniform("M"), 1, GL_FALSE, &M[0][0]);
 		glUniformMatrix4fv(heightshader->getUniform("P"), 1, GL_FALSE, &P[0][0]);
@@ -607,22 +623,31 @@ public:
 		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, IndexBufferIDBox);
 		glActiveTexture(GL_TEXTURE1);
 		glBindTexture(GL_TEXTURE_2D, WallTexture);
-		//glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_SHORT, (void*)0);
 
 		M = TransY * S * RotateX;
 		glUniformMatrix4fv(heightshader->getUniform("M"), 1, GL_FALSE, &M[0][0]);
 		glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_SHORT, (void*)0);
 
-		//RotateY = glm::rotate(glm::mat4(1.0f), angle, glm::vec3(0.0f, 1.0f, 0.0f));
-		//M = TransY * S * RotateY * RotateX;
-		//glUniformMatrix4fv(heightshader->getUniform("M"), 1, GL_FALSE, &M[0][0]);
-		//glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_SHORT, (void*)0);
+		// draw bottom
+		S = glm::scale(glm::mat4(1.0f), glm::vec3(BOARDWIDTH, BOARDBUFFER / 2.0, 1.0));
+		TransY = glm::translate(glm::mat4(1.0f), glm::vec3(LEFTSIDE, (BOTTOMSIDE - (BOARDBUFFER / 2.0)), BOARDPOSITION));
+		M = TransY * S;
+		glUniformMatrix4fv(heightshader->getUniform("M"), 1, GL_FALSE, &M[0][0]);
+		glUniformMatrix4fv(heightshader->getUniform("P"), 1, GL_FALSE, &P[0][0]);
+		glUniformMatrix4fv(heightshader->getUniform("V"), 1, GL_FALSE, &V[0][0]);
 
-		//RotateY = glm::rotate(glm::mat4(1.0f), -angle, glm::vec3(0.0f, 1.0f, 0.0f));
-		//TransY = glm::translate(glm::mat4(1.0f), glm::vec3(5.0f, -5.0f, -15));
-		//M = TransY * S * RotateY * RotateX;
-		//glUniformMatrix4fv(heightshader->getUniform("M"), 1, GL_FALSE, &M[0][0]);
-		//glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_SHORT, (void*)0);
+		glBindVertexArray(VertexArrayID);
+		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, IndexBufferIDBox);
+		glActiveTexture(GL_TEXTURE1);
+		glBindTexture(GL_TEXTURE_2D, BottomTex);
+
+		M = TransY * S * RotateX;
+		glUniformMatrix4fv(heightshader->getUniform("M"), 1, GL_FALSE, &M[0][0]);
+		glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_SHORT, (void*)0);
+
+
+
+
 		heightshader->unbind();
 
 	}
