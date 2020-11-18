@@ -21,7 +21,7 @@ using namespace glm;
 shared_ptr<Shape> sphere;
 shared_ptr<Shape> peg;
 
-#define NUMBALLS 20 // number of balls
+#define NUMBALLS 10 // number of balls
 #define NUMPEGS 100 // number of pegs
 
 #define BALLRADIUS 0.20 // radius of the balls
@@ -290,7 +290,7 @@ public:
 		char filepath[1000];
 
 		// Board Texture
-		string str = resourceDirectory + "/wood1.jpg";
+		string str = resourceDirectory + "/wood2.jpg";
 		strcpy(filepath, str.c_str());
 		unsigned char* data = stbi_load(filepath, &width, &height, &channels, 4);
 		glGenTextures(1, &WallTexture);
@@ -304,7 +304,7 @@ public:
 		glGenerateMipmap(GL_TEXTURE_2D);
 
 		// Peg Texture
-		str = resourceDirectory + "/metal.jpg";
+		str = resourceDirectory + "/magenta.png";
 		strcpy(filepath, str.c_str());
 		data = stbi_load(filepath, &width, &height, &channels, 4);
 		glGenTextures(1, &PegTex);
