@@ -21,16 +21,24 @@ using namespace glm;
 shared_ptr<Shape> sphere;
 shared_ptr<Shape> peg;
 
-#define NUMBALLS 1
-#define NUMPEGS 25
+#define NUMBALLS 1 // number of balls
+#define NUMPEGS 25 // number of pegs
 
-#define BALLRADIUS 0.20
-#define PEGSEPARATION (BALLRADIUS * 3)
+#define BALLRADIUS 0.20 // radius of the balls
+#define PEGSEPARATION (BALLRADIUS * 3.0) // how far to distance pegs between one another
 
-#define PEGSCALE 0.1
+#define PEGSCALE 0.1 // how large the pegs are
 
-#define BOARDWIDTH 10.0
-#define BOARDLENGTH 10.0
+#define BOARDBUFFER 2.0 // extra space at top and bottom of board
+
+#define BOARDWIDTH ((2.0 * sqrt(NUMPEGS) + 1.0) * PEGSEPARATION)
+#define BOARDLENGTH (((2.0 * sqrt(NUMPEGS) + 1.0) * PEGSEPARATION) + (2.0 * BOARDBUFFER))
+
+#define CAMERAPOSITION (-1.0 * BOARDLENGTH * 1.7) // distance of camera from board
+#define BOARDPOSITION 0.0 // z-ccordinate of the wall
+
+#define LEFTSIDE (-1.0 * BOARDWIDTH / 2.0)
+#define BOTTOMSIDE ((-1.0 * BOARDWIDTH / 2.0) + 2.0*BOARDBUFFER)
 
 
 double get_last_elapsed_time()
@@ -49,7 +57,7 @@ public:
 	camera()
 	{
 		w = a = s = d = 0;
-		pos = rot = glm::vec3(0, 0, 7);
+		pos = rot = glm::vec3(0, 0, CAMERAPOSITION);
 	}
 	glm::mat4 process(double ftime)
 	{
@@ -85,7 +93,7 @@ class ssbo_data
 public:  
 	vec4 ballpos[NUMBALLS]; // x, y, z, w = radius
 	vec4 ballv[NUMBALLS];	// x, y, z, w = collision
-	vec4 pegpos[NUMPEGS];
+	vec4 pegpos[NUMPEGS][NUMPEGS];
 
 	void update(float delta_t)
 	{
@@ -335,14 +343,21 @@ public:
 		glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
 		// INIT PEGS
-		for (int i = 0; i < NUMPEGS; i++) {
-			ssbo_CPUMEM.pegpos[i] = vec4(-1.0, -1.0, -20.0, PEGSCALE);
+		//for (int i = 0; i < NUMPEGS; i++) {
+		//	ssbo_CPUMEM.pegpos[i] = vec4(-1.0, -1.0, BOARDPOSITION + 1.0, PEGSCALE);
 
+		//}
+
+		for (int i = 0; i < sqrt(NUMPEGS); i++) {
+			for (int j = 0; j < sqrt(NUMPEGS); j++) {
+				ssbo_CPUMEM.pegpos[i][j] = vec4(LEFTSIDE + (((i*2.0) + (j % 2) + 1.0) * PEGSEPARATION), BOTTOMSIDE + ((j*2.0) * PEGSEPARATION), BOARDPOSITION + 1.0, PEGSCALE);
+
+			}
 		}
 
 		// INIT BALLS
 		for (int i = 0; i < NUMBALLS; i++) {
-			ssbo_CPUMEM.ballpos[i] = vec4(0.0, 5.0, -20.0, BALLRADIUS);
+			ssbo_CPUMEM.ballpos[i] = vec4(0.0, BOARDLENGTH/2, BOARDPOSITION + 1.0, BALLRADIUS);
 			ssbo_CPUMEM.ballv[i] = vec4(0.0);
 
 		}
@@ -555,23 +570,25 @@ public:
 		}
 
 		// DRAW PEGS
-		for (int i = 0; i < NUMPEGS; i++) {
-			TransZ = glm::translate(glm::mat4(1.0f), vec3(ssbo_CPUMEM.pegpos[i]));
-			S = glm::scale(glm::mat4(1.0f), glm::vec3(ssbo_CPUMEM.pegpos[i].w));
+		for (int i = 0; i < sqrt(NUMPEGS); i++) {
+			for (int j = 0; j < sqrt(NUMPEGS); j++) {
+				TransZ = glm::translate(glm::mat4(1.0f), vec3(ssbo_CPUMEM.pegpos[i][j]));
+				S = glm::scale(glm::mat4(1.0f), glm::vec3(ssbo_CPUMEM.pegpos[i][j].w));
 
-			M = TransZ * RotateX * S;
+				M = TransZ * RotateX * S;
 
-			// Draw the box using GLSL.
-			prog->bind();
+				// Draw the box using GLSL.
+				prog->bind();
 
-			//send the matrices to the shaders
-			glUniformMatrix4fv(prog->getUniform("P"), 1, GL_FALSE, &P[0][0]);
-			glUniformMatrix4fv(prog->getUniform("V"), 1, GL_FALSE, &V[0][0]);
-			glUniformMatrix4fv(prog->getUniform("M"), 1, GL_FALSE, &M[0][0]);
-			glUniform3fv(prog->getUniform("campos"), 1, &mycam.pos[0]);
-			glActiveTexture(GL_TEXTURE0);
-			glBindTexture(GL_TEXTURE_2D, PegTex);
-			peg->draw(prog, false);
+				//send the matrices to the shaders
+				glUniformMatrix4fv(prog->getUniform("P"), 1, GL_FALSE, &P[0][0]);
+				glUniformMatrix4fv(prog->getUniform("V"), 1, GL_FALSE, &V[0][0]);
+				glUniformMatrix4fv(prog->getUniform("M"), 1, GL_FALSE, &M[0][0]);
+				glUniform3fv(prog->getUniform("campos"), 1, &mycam.pos[0]);
+				glActiveTexture(GL_TEXTURE0);
+				glBindTexture(GL_TEXTURE_2D, PegTex);
+				peg->draw(prog, false);
+			}
 		}
 
 
@@ -580,7 +597,7 @@ public:
 		heightshader->bind();
 		//glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
 		S = glm::scale(glm::mat4(1.0f), glm::vec3(BOARDWIDTH, BOARDLENGTH, 1.0));
-		glm::mat4 TransY = glm::translate(glm::mat4(1.0f), glm::vec3(-1 * BOARDWIDTH/2, -1 * BOARDWIDTH / 2, -25));
+		glm::mat4 TransY = glm::translate(glm::mat4(1.0f), glm::vec3(-1 * BOARDWIDTH/2, -1 * BOARDWIDTH / 2, BOARDPOSITION));
 		M = TransY * S;
 		glUniformMatrix4fv(heightshader->getUniform("M"), 1, GL_FALSE, &M[0][0]);
 		glUniformMatrix4fv(heightshader->getUniform("P"), 1, GL_FALSE, &P[0][0]);
