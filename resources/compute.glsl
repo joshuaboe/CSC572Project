@@ -1,7 +1,7 @@
 #version 450 
 #extension GL_ARB_shader_storage_buffer_object : require
 
-#define NUMBALLS 20 // number of balls
+#define NUMBALLS 10 // number of balls
 #define NUMPEGS 100 // number of pegs
 
 #define BALLRADIUS 0.20 // radius of the balls
@@ -113,7 +113,7 @@ void main()
         if (length(diff) < distance_to_collide) {
             float dampening = 0.7;
             ballv[index].xy = normalize(diff) * length(ballv[index].xy) * dampening;
-            ballpos[index].xy = pegpos[row][col].xy + normalize(diff) * distance_to_collide;
+            ballpos[index].xy = pegpos[row][col].xy + normalize(diff) * distance_to_collide * 1.01;
         }
     }
 }
