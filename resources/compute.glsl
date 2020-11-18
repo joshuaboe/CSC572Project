@@ -11,7 +11,7 @@ layout (std430, binding=0) volatile buffer shader_data
 { 
 	vec4 ballpos[NUMBALLS]; // x, y, z, w = radius
 	vec4 ballv[NUMBALLS];	// x, y, z, w = collision
-	vec4 pegpos[NUMPEGS];
+	vec4 pegpos[NUMPEGS][NUMPEGS];
 };
 
 vec3 minus(vec3 v1, vec3 v2) {
