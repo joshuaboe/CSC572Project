@@ -113,7 +113,7 @@ void main()
         if (length(diff) < distance_to_collide) {
             float dampening = 0.7;
             ballv[index].xy = normalize(diff) * length(ballv[index].xy) * dampening;
-            ballpos[index].xy = pegpos[row][col].xy + normalize(diff) * distance_to_collide * 1.01;
+            ballpos[index].xy = pegpos[row][col].xy + normalize(diff) * distance_to_collide * 1.05;
         }
     }
 }
